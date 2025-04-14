@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="100" fill="#4a90e2" />
+  
+  <!-- Clipboard Base -->
+  <rect x="128" y="96" width="256" height="352" rx="20" fill="white" />
+  
+  <!-- Clipboard Top -->
+  <rect x="176" y="64" width="160" height="64" rx="16" fill="white" />
+  
+  <!-- Clipboard Clip -->
+  <rect x="224" y="48" width="64" height="32" rx="10" fill="#333" />
+  
+  <!-- Text Lines -->
+  <rect x="160" y="180" width="192" height="24" rx="4" fill="#eaeaea" />
+  <rect x="160" y="228" width="192" height="24" rx="4" fill="#eaeaea" />
+  <rect x="160" y="276" width="192" height="24" rx="4" fill="#eaeaea" />
+  <rect x="160" y="324" width="192" height="24" rx="4" fill="#eaeaea" />
+  <rect x="160" y="372" width="192" height="24" rx="4" fill="#eaeaea" />
+</svg> 
