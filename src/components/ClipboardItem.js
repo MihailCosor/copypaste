@@ -1,20 +1,43 @@
-import React from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 
 const ClipboardItem = ({ item, index, onCopy, onDelete }) => {
+  const [isTruncated, setIsTruncated] = useState(false);
+  const textRef = useRef(null);
+  
   // Function to handle "pop" action (copy then delete)
   const handlePop = () => {
-    onCopy(item); // First copy the text
-    // Then delete after a short delay to allow the copy to complete
-    setTimeout(() => {
-      onDelete(index);
-    }, 200);
+    // Copy the text but don't show toast for copy action
+    navigator.clipboard.writeText(item)
+      .then(() => {
+        // Then delete after a short delay to allow the copy to complete
+        setTimeout(() => {
+          onDelete(index, true); // Pass true to indicate this is a pop action
+        }, 200);
+      })
+      .catch(err => {
+        console.error('Failed to copy: ', err);
+      });
   };
+  
+  // Check if text is overflowing and needs truncation
+  useEffect(() => {
+    if (textRef.current) {
+      const isOverflowing = textRef.current.scrollHeight > textRef.current.clientHeight;
+      setIsTruncated(isOverflowing);
+    }
+  }, [item]);
 
   return (
     <>
       <div className="item-number">{index + 1}</div>
       <li className="item">
-        <span className="item-text">{item}</span>
+        <span 
+          ref={textRef}
+          className={`item-text ${isTruncated ? 'truncated' : ''}`}
+          title={isTruncated ? item : ''}
+        >
+          {item}
+        </span>
         <div className="button-group">
           <button 
             onClick={() => onCopy(item)} 

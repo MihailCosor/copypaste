@@ -4,11 +4,22 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import './App.css';
 import DraggableItem from './components/DraggableItem';
 import InputForm from './components/InputForm';
+import ProfileSelector from './components/ProfileSelector';
 import ToastManager from './components/ToastManager';
-import { saveItems, loadItems } from './services/ClipboardService';
+import { 
+  getProfiles, 
+  getActiveProfileId, 
+  setActiveProfileId, 
+  createProfile, 
+  deleteProfile, 
+  getProfileItems, 
+  saveProfileItems 
+} from './services/ClipboardService';
 import { checkLocalStorageAvailability, debugLocalStorage } from './services/StorageDebug';
 
 function App() {
+  const [profiles, setProfiles] = useState([]);
+  const [activeProfileId, setActiveProfileId] = useState('default');
   const [items, setItems] = useState([]);
   const [newItem, setNewItem] = useState('');
   const [isInitialized, setIsInitialized] = useState(false);
@@ -25,11 +36,14 @@ function App() {
     }
   }, []);
 
-  // Load items from localStorage on initial render
+  // Load profiles and active profile ID
   useEffect(() => {
     if (storageAvailable) {
-      const storedItems = loadItems();
-      setItems(storedItems);
+      const allProfiles = getProfiles();
+      const activeId = getActiveProfileId();
+      
+      setProfiles(allProfiles);
+      setActiveProfileId(activeId);
       
       // Debug localStorage content
       debugLocalStorage();
@@ -38,17 +52,44 @@ function App() {
     }
   }, [storageAvailable]);
 
-  // Save items to localStorage whenever the items array changes
+  // Load items for the active profile
   useEffect(() => {
-    // Only save if component has been initialized and storage is available
     if (isInitialized && storageAvailable) {
-      const saveSuccess = saveItems(items);
+      const profileItems = getProfileItems(activeProfileId);
+      setItems(profileItems);
+    }
+  }, [activeProfileId, isInitialized, storageAvailable]);
+
+  // Handle profile selection
+  const handleSelectProfile = (profileId) => {
+    setActiveProfileId(profileId);
+    showToast(`Switched to "${profiles.find(p => p.id === profileId)?.name}"`, 1500);
+  };
+
+  // Handle profile creation
+  const handleCreateProfile = (name) => {
+    const newProfile = createProfile(name);
+    if (newProfile) {
+      setProfiles([...profiles, newProfile]);
+      setActiveProfileId(newProfile.id);
+      showToast(`Created new list "${name}"`, 1500);
+    }
+  };
+
+  // Handle profile deletion
+  const handleDeleteProfile = (profileId) => {
+    const profileName = profiles.find(p => p.id === profileId)?.name;
+    if (deleteProfile(profileId)) {
+      setProfiles(profiles.filter(p => p.id !== profileId));
+      showToast(`Deleted list "${profileName}"`, 1500);
       
-      if (!saveSuccess) {
-        console.warn('Failed to save items to localStorage');
+      // If the active profile was deleted, activeProfileId gets set to 'default'
+      // in the deleteProfile function, so we should update our local state
+      if (activeProfileId === profileId) {
+        setActiveProfileId('default');
       }
     }
-  }, [items, isInitialized, storageAvailable]);
+  };
 
   const handleAddItem = () => {
     if (newItem.trim() !== '') {
@@ -56,25 +97,40 @@ function App() {
       setItems(newItems);
       setNewItem('');
       
-      // Force immediate save to localStorage
+      // Save to the active profile
       if (storageAvailable) {
-        saveItems(newItems);
-        debugLocalStorage();
+        saveProfileItems(newItems, activeProfileId);
+        
+        // Update the profiles list with the new item count
+        setProfiles(profiles.map(profile => 
+          profile.id === activeProfileId 
+            ? { ...profile, items: newItems } 
+            : profile
+        ));
       }
     }
   };
 
-  const handleDeleteItem = (index) => {
+  const handleDeleteItem = (index, isPop = false) => {
     const updatedItems = items.filter((_, i) => i !== index);
     setItems(updatedItems);
     
-    // Force immediate save to localStorage
+    // Save to the active profile
     if (storageAvailable) {
-      saveItems(updatedItems);
+      saveProfileItems(updatedItems, activeProfileId);
+      
+      // Update the profiles list with the new item count
+      setProfiles(profiles.map(profile => 
+        profile.id === activeProfileId 
+          ? { ...profile, items: updatedItems } 
+          : profile
+      ));
     }
     
-    // Show toast notification for pop action (already copied, now deleted)
-    showToast('Item popped (copied & removed)!', 1500);
+    // Only show toast notification if this is a pop action
+    if (isPop) {
+      showToast('Item popped (copied & removed)!', 1500);
+    }
   };
 
   const handleCopyItem = (text) => {
@@ -106,49 +162,84 @@ function App() {
       // Insert it at the new position
       newItems.splice(hoverIndex, 0, dragItem);
       
-      // Force save after reordering
+      // Save to the active profile
       if (storageAvailable) {
-        saveItems(newItems);
+        saveProfileItems(newItems, activeProfileId);
+        
+        // Update the profiles list with the new items arrangement
+        setProfiles(prevProfiles => 
+          prevProfiles.map(profile => 
+            profile.id === activeProfileId 
+              ? { ...profile, items: newItems } 
+              : profile
+          )
+        );
       }
       
       return newItems;
     });
-  }, [storageAvailable]);
+  }, [storageAvailable, activeProfileId, setProfiles]);
 
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="App">
         <div className="content">
-          <h1>Clipboard Manager</h1>
-          <p className="app-description">
-            Save, organize, and copy text snippets with ease.
-          </p>
-          
-          {!storageAvailable && (
-            <div className="storage-warning">
-              Warning: LocalStorage is not available. Your items won't be saved between sessions.
+          <div className="header-container">
+            <div className="header-left">
+              <h1>Clipboard Manager</h1>
+              <p className="app-description">
+                Save, organize, and copy text snippets with ease.
+              </p>
             </div>
-          )}
+            
+            <div className="header-right">
+              {/* No toggle button as per the updated instructions */}
+            </div>
+          </div>
           
-          <InputForm 
-            newItem={newItem}
-            setNewItem={setNewItem}
-            handleAddItem={handleAddItem}
-            handleKeyDown={handleKeyDown}
-          />
-
-          <ul className="items-list">
-            {items.map((item, index) => (
-              <DraggableItem 
-                key={index}
-                index={index}
-                item={item}
-                onCopy={handleCopyItem}
-                onDelete={handleDeleteItem}
-                moveItem={moveItem}
+          <div className="main-container">
+            <div className="sidebar">
+              <ProfileSelector 
+                profiles={profiles}
+                activeProfileId={activeProfileId}
+                onSelectProfile={handleSelectProfile}
+                onCreateProfile={handleCreateProfile}
+                onDeleteProfile={handleDeleteProfile}
               />
-            ))}
-          </ul>
+            </div>
+            
+            <div className="main-content">
+              {!storageAvailable && (
+                <div className="storage-warning">
+                  Warning: LocalStorage is not available. Your items won't be saved between sessions.
+                </div>
+              )}
+              
+              <div className="active-profile-indicator">
+                Current List: <strong>{profiles.find(p => p.id === activeProfileId)?.name || 'Default'}</strong>
+              </div>
+              
+              <InputForm 
+                newItem={newItem}
+                setNewItem={setNewItem}
+                handleAddItem={handleAddItem}
+                handleKeyDown={handleKeyDown}
+              />
+
+              <ul className="items-list">
+                {items.map((item, index) => (
+                  <DraggableItem 
+                    key={index}
+                    index={index}
+                    item={item}
+                    onCopy={handleCopyItem}
+                    onDelete={handleDeleteItem}
+                    moveItem={moveItem}
+                  />
+                ))}
+              </ul>
+            </div>
+          </div>
           
           {toastContainerJSX}
         </div>
